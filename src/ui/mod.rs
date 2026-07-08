@@ -224,7 +224,7 @@ impl EditorUi {
 
             let max_for_sides = (total_w - SPLIT_W * 2.0 - MIN_CENTER).max(0.0);
             // Применяем scaling К ЖЕЛАЕМЫМ ширинам, чтобы нарисовать.
-            let (mut left_w, mut right_w) = if desired_left + desired_right > max_for_sides {
+            let (left_w, right_w) = if desired_left + desired_right > max_for_sides {
                 let scale = max_for_sides / (desired_left + desired_right);
                 (desired_left * scale, desired_right * scale)
             } else {
