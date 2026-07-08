@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  BIN_NAME: lua_interface_interpretator
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x86_64
+            archive_ext: zip
+          - os: ubuntu-latest
+            target: linux-x86_64
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: macos
+            archive_ext: tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build release binary
+        run: cargo +stable build --release --locked
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "${env:BIN_NAME}-${env:GITHUB_REF_NAME}-${{ matrix.target }}.${{ matrix.archive_ext }}"
+          New-Item -ItemType Directory -Force dist
+          Copy-Item "target/release/${env:BIN_NAME}.exe" "dist/${env:BIN_NAME}.exe"
+          Compress-Archive -Path "dist/${env:BIN_NAME}.exe" -DestinationPath $archive
+
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          archive="${BIN_NAME}-${GITHUB_REF_NAME}-${{ matrix.target }}.${{ matrix.archive_ext }}"
+          mkdir -p dist
+          cp "target/release/${BIN_NAME}" "dist/${BIN_NAME}"
+          tar -czf "$archive" -C dist "${BIN_NAME}"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.BIN_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -t files < <(find release-assets -type f | sort)
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Prebuilt GLua Interface Builder binaries for $GITHUB_REF_NAME." \
+            --verify-tag
