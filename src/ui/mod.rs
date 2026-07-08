@@ -17,6 +17,8 @@ use self::history::History;
 use self::image_cache::{pick_image_file, ImageCache};
 use self::theme::{sidebar_section, tool_button};
 
+const MIN_LEFT_PANEL_WIDTH: f32 = 240.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubLayerRef {
     Text(uuid::Uuid),
@@ -410,7 +412,7 @@ fn column_splitter(
                 SplitterSide::Left,
             ) => {
                 *accum += dx;
-                editor.left_panel_width = (*start + *accum).clamp(120.0, 800.0);
+                editor.left_panel_width = (*start + *accum).clamp(MIN_LEFT_PANEL_WIDTH, 800.0);
             }
             (
                 Some(SplitterDrag::Right { start, accum }),
@@ -455,28 +457,26 @@ fn show_left_panel(
     project: &mut Project,
 ) {
     sidebar_section(ui, "Добавить", |ui| {
-        egui::Grid::new("element_palette")
-            .num_columns(2)
-            .spacing([6.0, 6.0])
-            .show(ui, |ui| {
-                for kind in [
-                    ElementKind::Panel,
-                    ElementKind::Frame,
-                    ElementKind::Button,
-                    ElementKind::EditablePanel,
-                    ElementKind::EditablePanelImaged,
-                    ElementKind::TextEntry,
-                    ElementKind::Image,
-                ] {
-                    if ui
-                        .button(kind.label())
-                        .on_hover_text("Добавить к выбранному родителю")
-                        .clicked()
-                    {
-                        editor.pending_add_kind = Some(kind);
-                    }
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+            for kind in [
+                ElementKind::Panel,
+                ElementKind::Frame,
+                ElementKind::Button,
+                ElementKind::EditablePanel,
+                ElementKind::EditablePanelImaged,
+                ElementKind::TextEntry,
+                ElementKind::Image,
+            ] {
+                if ui
+                    .button(kind.label())
+                    .on_hover_text("Добавить к выбранному родителю")
+                    .clicked()
+                {
+                    editor.pending_add_kind = Some(kind);
                 }
-            });
+            }
+        });
         ui.add_space(6.0);
         if ui
             .button("CloseButton")
