@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Write;
 
 use crate::model::{
@@ -16,13 +17,7 @@ pub fn generate_glua(project: &Project) -> String {
     let root = project.element(project.root_id).expect("root must exist");
 
     let ordered = topological_order(project, project.root_id);
-    let var_names: Vec<(Uuid, String)> = ordered
-        .iter()
-        .map(|id| {
-            let el = project.element(*id).unwrap();
-            (el.id, sanitize_var(&el.name))
-        })
-        .collect();
+    let var_names = unique_var_names(project, &ordered);
 
     for (id, var) in &var_names {
         let el = project.element(*id).unwrap();
@@ -244,11 +239,11 @@ fn emit_clear_builtin_text(out: &mut String, el: &UiElement, var: &str) {
         ElementKind::TextEntry => {
             writeln!(out, "\t{var}:SetValue(\"\")").unwrap();
         }
-        ElementKind::Button
-        | ElementKind::EditablePanel
-        | ElementKind::EditablePanelImaged
-        | ElementKind::Frame => {
+        ElementKind::Button => {
             writeln!(out, "\t{var}:SetText(\"\")").unwrap();
+        }
+        ElementKind::Frame => {
+            writeln!(out, "\t{var}:SetTitle(\"\")").unwrap();
         }
         _ => {}
     }
@@ -677,6 +672,25 @@ fn escape_lua(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn unique_var_names(project: &Project, ordered: &[Uuid]) -> Vec<(Uuid, String)> {
+    let mut used = HashSet::new();
+    ordered
+        .iter()
+        .map(|id| {
+            let el = project.element(*id).unwrap();
+            let base = sanitize_var(&el.name);
+            let mut candidate = base.clone();
+            let mut suffix = 2;
+            while used.contains(&candidate) {
+                candidate = format!("{base}_{suffix}");
+                suffix += 1;
+            }
+            used.insert(candidate.clone());
+            (el.id, candidate)
+        })
+        .collect()
+}
+
 fn sanitize_var(name: &str) -> String {
     let mut s: String = name
         .chars()
@@ -688,10 +702,38 @@ fn sanitize_var(name: &str) -> String {
             }
         })
         .collect();
-    if s.is_empty() || s.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    if s.is_empty() || s.chars().next().is_some_and(|c| c.is_ascii_digit()) || is_lua_keyword(&s) {
         s = format!("p_{s}");
     }
     s
+}
+
+fn is_lua_keyword(s: &str) -> bool {
+    matches!(
+        s,
+        "and"
+            | "break"
+            | "do"
+            | "else"
+            | "elseif"
+            | "end"
+            | "false"
+            | "for"
+            | "function"
+            | "goto"
+            | "if"
+            | "in"
+            | "local"
+            | "nil"
+            | "not"
+            | "or"
+            | "repeat"
+            | "return"
+            | "then"
+            | "true"
+            | "until"
+            | "while"
+    )
 }
 
 fn topological_order(project: &Project, root: Uuid) -> Vec<Uuid> {
@@ -704,5 +746,55 @@ fn visit(project: &Project, id: Uuid, out: &mut Vec<Uuid>) {
     out.push(id);
     for child_id in project.children_ids(id) {
         visit(project, child_id, out);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{ElementKind, Project, UiElement};
+
+    #[test]
+    fn editable_panel_export_does_not_call_missing_set_text() {
+        let project = Project::default();
+
+        let code = generate_glua(&project);
+
+        assert!(!code.contains(":SetText(\"\")"));
+    }
+
+    #[test]
+    fn frame_export_clears_title_with_frame_api() {
+        let mut project = Project::default();
+        let root_id = project.root_id;
+        let frame_id = project.add_element(UiElement::new(ElementKind::Frame, "Frame"), root_id);
+
+        let code = generate_glua(&project);
+        let names = unique_var_names(&project, &topological_order(&project, project.root_id));
+        let frame_var = names
+            .iter()
+            .find(|(id, _)| *id == frame_id)
+            .map(|(_, name)| name.as_str())
+            .unwrap();
+
+        assert!(code.contains(&format!("{frame_var}:SetTitle(\"\")")));
+        assert!(!code.contains(&format!("{frame_var}:SetText(\"\")")));
+    }
+
+    #[test]
+    fn duplicate_and_keyword_element_names_get_safe_lua_locals() {
+        let mut project = Project::default();
+        let root_id = project.root_id;
+        let first = project.add_element(UiElement::new(ElementKind::Panel, "end"), root_id);
+        let second = project.add_element(UiElement::new(ElementKind::Panel, "end"), root_id);
+        project.add_element(UiElement::new(ElementKind::Panel, "child"), first);
+        project.add_element(UiElement::new(ElementKind::Panel, "sibling"), second);
+
+        let code = generate_glua(&project);
+
+        assert!(code.contains("local p_end = vgui.Create(\"DPanel\", RootPanel)"));
+        assert!(code.contains("local p_end_2 = vgui.Create(\"DPanel\", RootPanel)"));
+        assert!(code.contains("local child = vgui.Create(\"DPanel\", p_end)"));
+        assert!(code.contains("local sibling = vgui.Create(\"DPanel\", p_end_2)"));
     }
 }
