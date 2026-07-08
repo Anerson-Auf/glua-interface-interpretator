@@ -2,6 +2,10 @@
 
 Visual editor for building Garry's Mod Derma/VGUI interfaces and exporting them as GLua code.
 
+## Screenshot / Скриншот
+
+![GLua Interface Builder canvas](docs/assets/glua-interface-builder.png)
+
 ## Features
 
 - Canvas-based UI layout editor.
