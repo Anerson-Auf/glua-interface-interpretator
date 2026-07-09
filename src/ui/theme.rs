@@ -107,8 +107,9 @@ pub fn sidebar_section(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce
     ui.add_space(4.0);
     ui.label(section_title(title));
     ui.add_space(4.0);
+    let inner_width = (ui.available_width() - 20.0).max(0.0);
     sidebar_frame().show(ui, |ui| {
-        ui.set_min_width(ui.available_width());
+        ui.set_min_width(inner_width);
         add_contents(ui);
     });
 }
