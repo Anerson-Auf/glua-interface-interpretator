@@ -1,4 +1,4 @@
-﻿# GLua Interface Builder
+# GLua Interface Builder
 
 Visual editor for building Garry's Mod Derma/VGUI interfaces and exporting them as GLua code.
 
@@ -32,6 +32,17 @@ Run tests:
 ```sh
 cargo test
 ```
+
+## Releases
+
+Prebuilt archives are published by GitHub Actions when a maintainer pushes a version tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow builds Windows, Linux, and macOS archives and attaches them to the GitHub Release for that tag.
 
 ## Export Flow
 
@@ -78,6 +89,17 @@ cargo run
 ```sh
 cargo test
 ```
+
+## Релизы
+
+Готовые архивы публикуются через GitHub Actions, когда maintainer пушит тег версии:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Release workflow собирает архивы для Windows, Linux и macOS и прикрепляет их к GitHub Release для этого тега.
 
 ## Экспорт
 
